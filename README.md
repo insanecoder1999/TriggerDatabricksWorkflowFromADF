@@ -1,27 +1,45 @@
-# TriggerDatabricksWorkflowFromADF
-## Description:
+# Trigger Databricks Workflow From Azure Data Factory
 
-The pipeline which will trigger the databricks workflow from Azure Data Factory
+## **Description**
+This document explains the Azure Data Factory (ADF) pipeline used to trigger and monitor a Databricks Workflow execution through REST API calls.
 
-## Architecture:
+---
 
-<img width="1657" height="462" alt="image" src="https://github.com/user-attachments/assets/41b2752b-eef9-4cf7-a2ab-54c276fba836" />
+## **Architecture**
 
-## Process Flow:
+<img width="1657" height="462" alt="Architecture Diagram" src="https://github.com/user-attachments/assets/41b2752b-eef9-4cf7-a2ab-54c276fba836" />
 
-1.The web activity(TriggersDatabricksWorkflow) triggers the particular workflow using REST API POST request. \
+---
 
+## **Process Flow**
 
-2.The until activity(WaitUntilJobCompletes) will be checking the status of the job every 60secs. After the successful completion or failure of the job it will go ahead with the next activities.\
+### **1. Trigger Databricks Workflow**
+- The **Web Activity (`TriggersDatabricksWorkflow`)** initiates a Databricks Workflow execution by sending a **POST** request using the Databricks REST API.
 
+---
 
-  2.1 The wait activity(SleepTask) will wait for 60 secs before checking the status of the job of that particular run id.\
-  2.2 The web activity(CheckJobStatus) will trigger a GET request for that particular job using the corresponding run id.\
-  2.3 The set variable activity(SetRunStatus) will be used to set the value of the status variable to the output of the GET request.\
+### **2. Monitor Job Run Status**
+The **Until Activity (`WaitUntilJobCompletes`)** continuously checks the job run status every 60 seconds and proceeds only when the job reaches a terminal state (success or failure).
 
+#### **2.1 Sleep Before Status Check**
+- **Wait Activity (`SleepTask`)** pauses execution for 60 seconds before the next API call.
 
-3. The if-else activity(DecisionOnJobStatus) will mark the pipeline as Succeeded or failed based on the status of the job run.\
+#### **2.2 Fetch Job Run Status**
+- **Web Activity (`CheckJobStatus`)** sends a **GET** request to retrieve the latest run status using the job’s `run_id`.
 
+#### **2.3 Store Status Value**
+- **Set Variable Activity (`SetRunStatus`)** updates the pipeline variable with the latest job run status from the GET response.
 
-   3.1 If the status is positive the pipeline will wait for 60 secs and will be Succeeded.\
-   3.2 If the status is negative this activity will execute the fail activity which will fail the pipeline with error message and error code.\
+---
+
+### **3. Decision Based on Run Result**
+The **If Condition Activity (`DecisionOnJobStatus`)** evaluates the captured job status.
+
+#### **3.1 If Job Succeeded**
+- The pipeline waits for 60 seconds and then marks itself as **Succeeded**.
+
+#### **3.2 If Job Failed**
+- The pipeline executes a **Fail Activity** which terminates execution with an error code and error message.
+
+---
+
