@@ -1,0 +1,210 @@
+{
+	"name": "TriggerDatabricksWorkflow",
+	"properties": {
+		"activities": [
+			{
+				"name": "TriggerDatabricksWorkflow",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Authorization": {
+							"value": "@concat('Bearer ',pipeline().parameters.PersonalAccessToken)",
+							"type": "Expression"
+						}
+					},
+					"url": {
+						"value": "@concat(\n    pipeline().parameters.DatabricksHostName,\n    '/api/2.1/jobs/run-now'\n)",
+						"type": "Expression"
+					},
+					"body": {
+						"value": "{\n  \"job_id\": \"@{pipeline().parameters.DatabricksJobId}\",\n  \"job_parameters\": {\n    \"name\": \"Surajit\" \n  }\n}",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "WaitUntilJobCompletes",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "TriggerDatabricksWorkflow",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(equals(variables('JobStatus'),'TERMINATED'),equals(variables('JobStatus'),'INTERNAL_ERROR'))",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "CheckJobStatus",
+							"description": "Check the status of the job",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "SleepTask",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"headers": {
+									"Authorization": {
+										"value": "@concat('Bearer ',pipeline().parameters.PersonalAccessToken)",
+										"type": "Expression"
+									}
+								},
+								"url": {
+									"value": "@concat(\n    pipeline().parameters.DatabricksHostName,\n    '/api/2.1/jobs/runs/get?run_id=',\n    activity('TriggerDatabricksWorkflow').output.run_id\n)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "SleepTask",
+							"description": "Interval while checking job run status",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": {
+									"value": "@variables('WaitSeconds')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "SetRunStatus",
+							"description": "set the status variable ",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "CheckJobStatus",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "JobStatus",
+								"value": {
+									"value": "@activity('CheckJobStatus').output.state.life_cycle_state",
+									"type": "Expression"
+								}
+							}
+						}
+					],
+					"timeout": "0.12:00:00"
+				}
+			},
+			{
+				"name": "DecisionOnJobStatus",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "WaitUntilJobCompletes",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(activity('CheckJobStatus').output.state.result_state,'SUCCESS')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "FailPipeline",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@concat(activity('CheckJobStatus').output.state.state_message,' with job run url ',activity('CheckJobStatus').output.run_page_url)",
+									"type": "Expression"
+								},
+								"errorCode": {
+									"value": "@pipeline().parameters.DatabricksJobId",
+									"type": "Expression"
+								}
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Wait1",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": {
+									"value": "@variables('WaitSeconds')",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"DatabricksHostName": {
+				"type": "string"
+			},
+			"DatabricksJobId": {
+				"type": "string"
+			},
+			"PersonalAccessToken": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"JobStatus": {
+				"type": "String",
+				"defaultValue": "Running"
+			},
+			"WaitSeconds": {
+				"type": "Integer",
+				"defaultValue": 60
+			},
+			"ContentType": {
+				"type": "String",
+				"defaultValue": "application/json"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-11-14T18:45:42Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

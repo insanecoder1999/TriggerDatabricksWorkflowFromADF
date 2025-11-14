@@ -1,0 +1,9 @@
+{
+	"name": "adf-dev-suro",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "aea1be25-16a9-4a4b-bdd5-6309e72138f8",
+		"tenantId": "4e734215-9000-49be-99fd-769c7d9d044a"
+	}
+}
